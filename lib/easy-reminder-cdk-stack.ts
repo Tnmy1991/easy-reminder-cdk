@@ -1,4 +1,5 @@
 import * as cdk from "aws-cdk-lib";
+import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
@@ -45,6 +46,7 @@ export class EasyReminderCdkStack extends cdk.Stack {
       handler: "notification.handler",
       environment: {
         SCHEDULE_TABLE_NAME: scheduledTable.tableName,
+        SENDER_EMAIl: "dayeno8226@atebin.com",
       },
     });
 
@@ -57,6 +59,15 @@ export class EasyReminderCdkStack extends cdk.Stack {
           }),
         ],
       })
+    );
+
+    // Grant the Lambda function only the necessary SNS actions
+    const lambdaRole = notification.role;
+    lambdaRole?.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonSNSFullAccess")
+    );
+    lambdaRole?.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonSESFullAccess")
     );
 
     // defines as AWS APIGateway resource
@@ -79,6 +90,7 @@ export class EasyReminderCdkStack extends cdk.Stack {
 
     reminderTable.grantReadWriteData(reminder);
     scheduledTable.grantReadWriteData(reminder);
-    scheduledTable.grantReadWriteData(notification);
+
+    reminderTable.grantReadWriteData(notification);
   }
 }
