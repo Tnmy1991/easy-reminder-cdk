@@ -5,6 +5,7 @@
     "easy-reminder-cdk": "bin/easy-reminder-cdk.js"
   },
   "scripts": {
+    "postinstall": "(cd lambda && npm install);",
     "build": "tsc",
     "watch": "tsc -w",
     "test": "jest",

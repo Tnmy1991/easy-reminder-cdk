@@ -1,0 +1,13 @@
+{
+  "name": "lambda-crud-dynamodb",
+  "version": "1.0.0",
+  "description": "Lambdas to do CRUD operations on DynamoDB",
+  "type": "module",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.137.0",
+    "@aws-sdk/util-dynamodb": "^3.137.0"
+  }
+}

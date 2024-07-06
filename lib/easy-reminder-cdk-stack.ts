@@ -1,16 +1,84 @@
-import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-// import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as cdk from "aws-cdk-lib";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import * as apigateway from "aws-cdk-lib/aws-apigateway";
+import { DynamoEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 
 export class EasyReminderCdkStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: cdk.App, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // The code that defines your stack goes here
+    // Reminder Table
+    const reminderTable = new dynamodb.Table(this, "reminders", {
+      partitionKey: {
+        name: "reminder_id",
+        type: dynamodb.AttributeType.STRING,
+      },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
 
-    // example resource
-    // const queue = new sqs.Queue(this, 'EasyReminderCdkQueue', {
-    //   visibilityTimeout: cdk.Duration.seconds(300)
-    // });
+    // Scheduled Reminder Table
+    const scheduledTable = new dynamodb.Table(this, "scheduled-reminders", {
+      partitionKey: {
+        name: "scheduled_id",
+        type: dynamodb.AttributeType.STRING,
+      },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      timeToLiveAttribute: "schedule_at",
+      stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
+    });
+
+    // defines an AWS Lambda resource
+    const reminder = new lambda.Function(this, "ReminderHandler", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      code: lambda.Code.fromAsset("lambda"),
+      handler: "reminder.handler",
+      environment: {
+        REMINDER_TABLE_NAME: reminderTable.tableName,
+        SCHEDULE_TABLE_NAME: scheduledTable.tableName,
+      },
+    });
+
+    const notification = new lambda.Function(this, "NotificationHandler", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      code: lambda.Code.fromAsset("lambda"),
+      handler: "notification.handler",
+      environment: {
+        SCHEDULE_TABLE_NAME: scheduledTable.tableName,
+      },
+    });
+
+    notification.addEventSource(
+      new DynamoEventSource(scheduledTable, {
+        startingPosition: lambda.StartingPosition.LATEST,
+        filters: [
+          lambda.FilterCriteria.filter({
+            eventName: lambda.FilterRule.isEqual("REMOVE"),
+          }),
+        ],
+      })
+    );
+
+    // defines as AWS APIGateway resource
+    const api = new apigateway.LambdaRestApi(this, "reminderApi", {
+      integrationOptions: {
+        proxy: true,
+      },
+      handler: reminder,
+      proxy: false,
+    });
+
+    const reminderApi = api.root.addResource("reminder");
+    reminderApi.addMethod("GET");
+    reminderApi.addMethod("POST");
+
+    const reminderFetch = reminderApi.addResource("{reminder_id}");
+    reminderFetch.addMethod("GET");
+    reminderFetch.addMethod("PUT");
+    reminderFetch.addMethod("DELETE");
+
+    reminderTable.grantReadWriteData(reminder);
+    scheduledTable.grantReadWriteData(reminder);
+    scheduledTable.grantReadWriteData(notification);
   }
 }
